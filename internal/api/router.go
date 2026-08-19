@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/momtazularefin/truebearing/internal/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -15,43 +16,57 @@ import (
 func NewRouter(db *pgxpool.Pool, rdb *redis.Client, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
-	// Global middleware stack.
+	// Global middleware stack (outermost first)
 	r.Use(chimiddleware.RealIP)
 	r.Use(RequestID)
 	r.Use(RequestLogger(logger))
+	r.Use(metrics.Middleware)
 	r.Use(chimiddleware.Recoverer)
 
-	// Operational probes.
+	// Operational probes (unauthenticated)
 	r.Get("/healthz", HealthHandler(db, rdb))
 	r.Get("/readyz", ReadyHandler(db, rdb))
 
-	// API v1 resource routes (stubs).
+	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Route("/tenants", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-		})
+		// Public tenant registration (generates initial tenant & API key)
+		r.Post("/tenants", CreateTenantHandler(db))
 
-		r.Route("/datasets", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-			r.Get("/{id}", notImplemented)
-			r.Put("/{id}", notImplemented)
-			r.Delete("/{id}", notImplemented)
-		})
+		// Authenticated routes group
+		r.Group(func(r chi.Router) {
+			r.Use(Authenticate(db))
 
-		r.Route("/prompts", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-			r.Get("/{id}", notImplemented)
-			r.Put("/{id}", notImplemented)
-			r.Delete("/{id}", notImplemented)
-		})
+			// Tenant and API key management
+			r.Route("/tenants", func(r chi.Router) {
+				r.Get("/me", GetTenantMeHandler(db))
+				r.Post("/keys", CreateAPIKeyHandler(db))
+				r.Delete("/keys/{id}", RevokeAPIKeyHandler(db))
+			})
 
-		r.Route("/runs", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-			r.Get("/{id}", notImplemented)
+			// Datasets CRUD
+			r.Route("/datasets", func(r chi.Router) {
+				r.Get("/", ListDatasetsHandler(db))
+				r.Post("/", CreateDatasetHandler(db))
+				r.Get("/{id}", GetDatasetHandler(db))
+				r.Put("/{id}", UpdateDatasetHandler(db))
+				r.Delete("/{id}", DeleteDatasetHandler(db))
+			})
+
+			// Prompts CRUD (versioned)
+			r.Route("/prompts", func(r chi.Router) {
+				r.Get("/", ListPromptsHandler(db))
+				r.Post("/", CreatePromptHandler(db))
+				r.Get("/{id}", GetPromptHandler(db))
+				r.Put("/{id}", UpdatePromptHandler(db))
+				r.Delete("/{id}", DeletePromptHandler(db))
+			})
+
+			// Runs (M2 queue & workers)
+			r.Route("/runs", func(r chi.Router) {
+				r.Get("/", notImplemented)
+				r.Post("/", notImplemented)
+				r.Get("/{id}", notImplemented)
+			})
 		})
 	})
 

@@ -13,6 +13,7 @@ import (
 	"github.com/momtazularefin/truebearing/internal/api"
 	"github.com/momtazularefin/truebearing/internal/config"
 	"github.com/momtazularefin/truebearing/internal/database"
+	"github.com/momtazularefin/truebearing/internal/metrics"
 	"github.com/momtazularefin/truebearing/internal/queue"
 )
 
@@ -64,7 +65,7 @@ func main() {
 	defer rdb.Close()
 	logger.Info("connected to redis")
 
-	// Build router and HTTP server.
+	// Build router and primary HTTP server.
 	handler := api.NewRouter(db, rdb, logger)
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -74,12 +75,21 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server in a goroutine.
+	// Start main API server in a goroutine.
 	go func() {
-		logger.Info("server starting", "addr", srv.Addr)
+		logger.Info("main server starting", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server listen error", "error", err)
 			os.Exit(1)
+		}
+	}()
+
+	// Start dedicated metrics server on secondary listener (pod-local, NFR4).
+	metricsSrv := metrics.NewServer(":"+cfg.MetricsPort, logger)
+	go func() {
+		logger.Info("metrics server starting", "addr", metricsSrv.Addr)
+		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("metrics server listen error", "error", err)
 		}
 	}()
 
@@ -94,7 +104,9 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server forced to shutdown", "error", err)
-		os.Exit(1)
+	}
+	if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("metrics server forced to shutdown", "error", err)
 	}
 
 	logger.Info("server stopped gracefully")

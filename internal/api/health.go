@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,12 +17,16 @@ func HealthHandler(db *pgxpool.Pool, rdb *redis.Client) http.HandlerFunc {
 		ctx := r.Context()
 
 		pgStatus := "ok"
-		if err := db.Ping(ctx); err != nil {
+		if db == nil {
+			pgStatus = "error: database connection uninitialized"
+		} else if err := db.Ping(ctx); err != nil {
 			pgStatus = "error: " + err.Error()
 		}
 
 		redisStatus := "ok"
-		if err := rdb.Ping(ctx).Err(); err != nil {
+		if rdb == nil {
+			redisStatus = "error: redis connection uninitialized"
+		} else if err := rdb.Ping(ctx).Err(); err != nil {
 			redisStatus = "error: " + err.Error()
 		}
 
@@ -51,8 +56,18 @@ func ReadyHandler(db *pgxpool.Pool, rdb *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		pgErr := db.Ping(ctx)
-		redisErr := rdb.Ping(ctx).Err()
+		var pgErr, redisErr error
+		if db == nil {
+			pgErr = errors.New("database connection uninitialized")
+		} else {
+			pgErr = db.Ping(ctx)
+		}
+
+		if rdb == nil {
+			redisErr = errors.New("redis connection uninitialized")
+		} else {
+			redisErr = rdb.Ping(ctx).Err()
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 

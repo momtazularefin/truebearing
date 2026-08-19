@@ -8,6 +8,7 @@ type Config struct {
 	DatabaseURL string
 	RedisURL    string
 	Port        string
+	MetricsPort string
 	LogLevel    string
 }
 
@@ -18,6 +19,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://truebearing:truebearing@localhost:5432/truebearing?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		Port:        getEnv("PORT", "8080"),
+		MetricsPort: getEnv("METRICS_PORT", "9090"),
 		LogLevel:    getEnv("LOG_LEVEL", "info"),
 	}
 }
