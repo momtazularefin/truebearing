@@ -1,31 +1,99 @@
-# Binaries
+# TrueBearing .gitignore
+#
+# The human actor stages with a blind `git add .`, so this file is the only
+# thing standing between a stray artifact and the public history. Entries for a
+# milestone's tooling are added BEFORE that milestone starts, not after.
+#
+# Deliberately NOT ignored: go.sum, .terraform.lock.hcl, .env.example.
+# All three must be committed for a clean clone to build and deploy reproducibly.
+
+# --- Go build output ---
+/truebearing
+/truebearing.exe
+/server
+/server.exe
+/bin/
+/dist/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-truebearing
-/bin/
 
-# Test
+# --- Go tooling ---
 *.test
 coverage.out
 coverage.html
-
-# Dependencies
 /vendor/
+go.work
+go.work.sum
 
-# Environment
+# --- Environment and credentials ---
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+secrets.yaml
+secrets.yml
 
-# IDE
+# --- Terraform (M4). State files embed provider credentials and resource secrets. ---
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+
+# --- Kubernetes (M4) ---
+kubeconfig
+*.kubeconfig
+kubeconfig.yaml
+kubeconfig.yml
+*-secret.generated.yaml
+
+# --- Web UI (M5) ---
+node_modules/
+.vite/
+.next/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Load testing and local telemetry (M4, M5) ---
+k6-results*.json
+loadtest/results/
+prometheus-data/
+grafana-data/
+
+# --- Local runtime state ---
+pgdata/
+tmp/
+*.pid
+*.log
+
+# --- Licensed standards library, defence in depth ---
+# These live only at the rise root, outside every repository. This entry exists
+# so that a copy accidentally placed here can never be staged.
+standards/
+*.pdf
+
+# --- IDE ---
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# OS
+# --- OS ---
 .DS_Store
 Thumbs.db
